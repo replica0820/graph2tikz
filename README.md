@@ -19,6 +19,9 @@ GUIでグラフを作成し、TikZコードへ変換するツール。
 - React
 - TypeScript
 
+### Backend
+- FastAPI
+
 ## MVP
 
 - [ ] 頂点追加
