@@ -5,6 +5,7 @@ function App() {
   // ここにグラフの状態（頂点と辺）を持たせる予定です
   const [vertices, setVertices] = useState<Record<string, Vertex>>({})
   const [edges, setEdges] = useState<Edge[]>([])
+  const [moveVertex, setMoveVertex] = useState<string|null>(null)
 
   const handleCanvasClick = (e: React.MouseEvent<SVGSVGElement>) => {
     const x = e.nativeEvent.offsetX;
@@ -23,6 +24,34 @@ function App() {
     }));
   };
 
+  const handleVertexMouseDown = (e: React.MouseEvent<SVGCircleElement>, id: string) => {
+    e.stopPropagation();
+    setMoveVertex(id);
+  }
+
+  const handleMouseUp = () => {
+    setMoveVertex(null)
+  }
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!moveVertex) return;
+
+    const x = e.nativeEvent.offsetX;
+    const y = e.nativeEvent.offsetY;
+
+    // 3. verticesの状態を更新し、つかんでいる頂点の座標だけを上書きする
+    setVertices(state => {
+      return{
+        ...state,
+        [moveVertex]: {
+          ...state[moveVertex],
+          x: x,
+          y: y
+        }
+      }
+    })
+  }
+
   return (
     <div style={{ width: '100vw', height: '100vh', backgroundColor: '#f3f4f6' }}>
       {/* ツールバーやヘッダーを置く領域 */}
@@ -33,10 +62,12 @@ function App() {
       {/* グラフを描画するSVGキャンバス */}
       <svg 
         onClick={handleCanvasClick}
+        onMouseUp={handleMouseUp}
+        onMouseMove={handleMouseMove}
         style={{ width: '100%', height: 'calc(100vh - 60px)', backgroundColor: 'white' }}
       >
         {Object.values(vertices).map((v) => (
-          <circle key={v.id} cx={v.x} cy={v.y} r="15" fill="black"/>
+          <circle onClick={(e) => e.stopPropagation()} onMouseDown={(e) => handleVertexMouseDown(e, v.id)} key={v.id} cx={v.x} cy={v.y} r="15" fill="black"/>
         ))}
       </svg>
     </div>
