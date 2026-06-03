@@ -3,12 +3,35 @@ import type { Vertex, Edge } from './types'
 
 function App() {
   const [isCopied, setIsCopied] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(400);
+  const [sidebarWidth, setSidebarWidth] = useState(800);
   const [isResizing, setIsResizing] = useState(false);
   const [vertices, setVertices] = useState<Record<string, Vertex>>({})
   const [edges, setEdges] = useState<Edge[]>([])
   const [moveVertex, setMoveVertex] = useState<string|null>(null)
   const [sourceVertexId, setSourceVertexId] = useState<string|null>(null)
+
+  const handleEdgeContextMenu = (e: React.MouseEvent<SVGLineElement>, edgeId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    setEdges(prev => prev.filter(edge => edge.id !== edgeId));
+  };
+
+  const handleVertexContextMenu = (e: React.MouseEvent<SVGCircleElement>, vertexid: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    setVertices(prev => {
+      const newVertices = { ...prev };
+      delete newVertices[vertexid];
+      return newVertices;
+    });
+
+    setEdges(prev => prev.filter(edge => edge.sourceId !== vertexid && edge.targetId !== vertexid));
+
+    if (sourceVertexId === vertexid) setSourceVertexId(null);
+    if (moveVertex === vertexid) setMoveVertex(null);
+  }
 
   const handleGlobalMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isResizing) return;
@@ -123,17 +146,20 @@ function App() {
                   key={edge.id} 
                   x1={sourceVertex.x} y1={sourceVertex.y} 
                   x2={targetVertex.x} y2={targetVertex.y} 
-                  stroke="#333" strokeWidth="2"
+                  stroke="#333" strokeWidth="4" // 少し太くすると押しやすいです
+                  style={{ cursor: 'pointer' }} // カーソルを指マークに
+                  onContextMenu={(e) => handleEdgeContextMenu(e, edge.id)} // 右クリックイベント！
                 />
               );
             })}
             {Object.values(vertices).map((v) => (
               <circle 
-                onClick={(e) => e.stopPropagation()} 
-                onMouseDown={(e) => handleVertexMouseDown(e, v.id)} 
                 key={v.id} cx={v.x} cy={v.y} r="12" 
                 fill="white" stroke="#333" strokeWidth="3"
                 style={{ cursor: 'pointer' }}
+                onClick={(e) => e.stopPropagation()} 
+                onMouseDown={(e) => handleVertexMouseDown(e, v.id)} 
+                onContextMenu={(e) => handleVertexContextMenu(e, v.id)} // 右クリックイベント！
               />
             ))}
           </svg>
