@@ -9,6 +9,7 @@ function App() {
   const [edges, setEdges] = useState<Edge[]>([])
   const [moveVertex, setMoveVertex] = useState<string|null>(null)
   const [sourceVertexId, setSourceVertexId] = useState<string|null>(null)
+  const [selectVertexIds, setSelectVertexIds] = useState<string[]>([])
 
   const handleEdgeContextMenu = (e: React.MouseEvent<SVGLineElement>, edgeId: string) => {
     e.preventDefault();
@@ -69,6 +70,17 @@ function App() {
 
   const handleVertexMouseDown = (e: React.MouseEvent<SVGCircleElement>, id: string) => {
     e.stopPropagation();
+    if (e.altKey) {
+      setSelectVertexIds(prev => {
+        if (prev.includes(id)) {
+          return prev.filter(vId => vId !== id);
+        }else {
+          return [...prev, id]
+        }
+      });
+      return
+    }
+
     if (sourceVertexId){
       const newEdge: Edge = {
         id: `e-${Date.now()}`, sourceId: sourceVertexId, targetId: id, isDirected: false,
@@ -116,6 +128,80 @@ function App() {
     return code;
   }
 
+  const handleAlign = (type: 'horizontal' | 'vertical' | 'circle') => {
+    // 2つ以上の頂点が選ばれていない場合は何もしない
+    if (selectVertexIds.length < 2) return;
+
+    setVertices(prev => {
+      // 既存の頂点データをディープコピー（安全に更新するため）
+      const newVertices = { ...prev };
+      
+      // 選ばれている頂点のデータ（オブジェクト）だけを配列として抽出
+      const selectedNodes = selectVertexIds.map(id => newVertices[id]);
+      
+      if (type === 'horizontal') {
+        let totalY = 0;
+        selectedNodes.forEach(node => {
+          totalY += node.y;
+        });
+        const avgY = totalY / selectedNodes.length;
+
+        selectedNodes.sort((a,b) => a.x - b.x);
+
+        const startX = selectedNodes[0].x;
+        const endX = selectedNodes[selectedNodes.length - 1].x;
+
+        const stepX = (endX - startX) / (selectedNodes.length - 1);
+
+        selectedNodes.forEach((node, index) => {
+          newVertices[node.id].y = avgY;
+          newVertices[node.id].x = startX + (stepX * index);
+        });
+      } else if (type === 'vertical') {
+        let totalX = 0;
+        selectedNodes.forEach(node => {
+          totalX += node.x;
+        });
+        const avgX = totalX / selectedNodes.length;
+
+        selectedNodes.sort((a,b) => a.y - b.y);
+
+        const startY = selectedNodes[0].y;
+        const endY = selectedNodes[selectedNodes.length - 1].y;
+
+        const stepY = (endY - startY) / (selectedNodes.length - 1);
+
+        selectedNodes.forEach((node,index) => {
+          newVertices[node.id].x = avgX;
+          newVertices[node.id].y = startY + (stepY * index);
+        });
+      } else if (type === 'circle') {
+        let totalX = 0;
+        let totalY = 0;
+        selectedNodes.forEach(node => {
+          totalX += node.x;
+          totalY += node.y;
+        })
+        const N = selectedNodes.length;
+        const centerX = totalX/N;
+        const centerY = totalY/N;
+
+        const borderRadius = 100;
+
+        selectedNodes.forEach((node, index) => {
+          const angle = (2 * Math.PI * index) / N;
+          newVertices[node.id].x = centerX + borderRadius * Math.cos(angle);
+          newVertices[node.id].y = centerY + borderRadius * Math.sin(angle);
+        })
+      }
+
+      // 最後に、選択状態を解除しておくと連続操作が暴発せず親切です
+      setSelectVertexIds([]);
+
+      return newVertices;
+    });
+  };
+
   return (
     <div 
       onMouseMove={handleGlobalMouseMove} 
@@ -123,8 +209,34 @@ function App() {
       style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#f3f4f6', display: 'flex', flexDirection: 'column', userSelect: isResizing ? 'none' : 'auto' }}
     >
       
-      <div style={{ padding: '15px 20px', backgroundColor: 'white', borderBottom: '1px solid #ccc', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', zIndex: 10 }}>
+      {/* ツールバーやヘッダーを置く領域 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 20px', backgroundColor: 'white', borderBottom: '1px solid #ccc', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', zIndex: 10 }}>
         <h3 style={{ margin: 0, color: '#333' }}>Graph to TikZ</h3>
+        
+        {/* 🌟 追加: 整列ボタン群 */}
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            onClick={() => handleAlign('horizontal')}
+            disabled={selectVertexIds.length < 2}
+            style={{ padding: '6px 12px', cursor: selectVertexIds.length < 2 ? 'not-allowed' : 'pointer', borderRadius: '4px', border: '1px solid #333', backgroundColor: '#fff', color: '#333' }}
+          >
+            横に揃える
+          </button>
+          <button 
+            onClick={() => handleAlign('vertical')}
+            disabled={selectVertexIds.length < 2}
+            style={{ padding: '6px 12px', cursor: selectVertexIds.length < 2 ? 'not-allowed' : 'pointer', borderRadius: '4px', border: '1px solid #333', backgroundColor: '#fff', color: '#333' }}
+          >
+            縦に揃える
+          </button>
+          <button 
+            onClick={() => handleAlign('circle')}
+            disabled={selectVertexIds.length < 2}
+            style={{ padding: '6px 12px', cursor: selectVertexIds.length < 2 ? 'not-allowed' : 'pointer', borderRadius: '4px', border: '1px solid #333', backgroundColor: '#fff', color: '#333' }}
+          >
+            円状に配置
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -153,14 +265,24 @@ function App() {
               );
             })}
             {Object.values(vertices).map((v) => (
-              <circle 
-                key={v.id} cx={v.x} cy={v.y} r="12" 
-                fill="white" stroke="#333" strokeWidth="3"
-                style={{ cursor: 'pointer' }}
-                onClick={(e) => e.stopPropagation()} 
-                onMouseDown={(e) => handleVertexMouseDown(e, v.id)} 
-                onContextMenu={(e) => handleVertexContextMenu(e, v.id)} // 右クリックイベント！
-              />
+              <g key={v.id}>
+                {(sourceVertexId === v.id || selectVertexIds.includes(v.id)) &&(
+                  <circle
+                  cx={v.x} cy={v.y} r = "18"
+                  fill='#3b82f6' opacity="0.3"
+                  style={{pointerEvents: 'none'}}
+                  />
+                )}
+
+                <circle
+                  onClick={(e) => e.stopPropagation()} 
+                  onMouseDown={(e) => handleVertexMouseDown(e, v.id)} 
+                  onContextMenu={(e) => handleVertexContextMenu(e, v.id)} 
+                  cx={v.x} cy={v.y} r="12" 
+                  fill="white" stroke="#333" strokeWidth="3"
+                  style={{ cursor: 'pointer' }}
+                />
+              </g>
             ))}
           </svg>
         </div>
