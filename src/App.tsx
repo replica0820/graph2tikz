@@ -248,11 +248,11 @@ function App() {
       style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#f3f4f6', display: 'flex', flexDirection: 'column', userSelect: isResizing ? 'none' : 'auto' }}
     >
       
-      {/* ツールバーやヘッダーを置く領域 */}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 20px', backgroundColor: 'white', borderBottom: '1px solid #ccc', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', zIndex: 10 }}>
         <h3 style={{ margin: 0, color: '#333' }}>Graph to TikZ</h3>
         
-        {/* 🌟 追加: 整列ボタン群 */}
+
         <div style={{ display: 'flex', gap: '10px' }}>
           {selectedEdgeId && <input 
             type="range"
