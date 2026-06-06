@@ -12,4 +12,5 @@ export interface Edge {
   sourceId: string; // 始点
   targetId: string; // 終点
   isDirected: boolean;
+  curveStrength? : number;
 }

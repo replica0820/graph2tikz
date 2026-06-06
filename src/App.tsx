@@ -11,8 +11,9 @@ function App() {
   const [sourceVertexId, setSourceVertexId] = useState<string|null>(null)
   const [selectVertexIds, setSelectVertexIds] = useState<string[]>([])
   const [isDirectedMode, setIsDirectedMode] = useState(false)
+  const [selectedEdgeId, setSelectEdgeId] = useState<string|null>(null)
 
-  const handleEdgeContextMenu = (e: React.MouseEvent<SVGLineElement>, edgeId: string) => {
+  const handleEdgeContextMenu = (e: React.MouseEvent<SVGPathElement>, edgeId: string) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -56,6 +57,7 @@ function App() {
     const y = e.nativeEvent.offsetY;
     const newId = `v-${Date.now()}`;
     const newVertex: Vertex = { id: newId, x: x, y: y };
+    setSelectEdgeId(null);
 
     if (sourceVertexId){
       const newEdge: Edge = {
@@ -95,6 +97,12 @@ function App() {
     }
   }
 
+  const handleEdgeMouseDown = (e: React.MouseEvent<SVGPathElement>, id: string) => {
+    e.stopPropagation();
+
+    setSelectEdgeId(prev => prev === id? null: id);
+  }
+
   const handleMouseUp = () => {
     setMoveVertex(null)
   }
@@ -109,35 +117,65 @@ function App() {
   }
 
   const generateTikzCode = () => {
-    let code = "\\begin{tikzpicture}[scale=0.05]\n";
+    let code = "\\begin{figure}[H]\n\\begin{tikzpicture}\n";
     const nodeIdMap: Record<string, number> = {};
     let counter = 1;
 
-    Object.values(vertices).forEach(v => {
+    const scaleFactor = 100; 
+    const formatCoord = (val: number) => (val / scaleFactor).toFixed(1);
+
+    const sortedVertices = Object.values(vertices).sort((a, b) => {
+      if (Math.abs(a.x - b.x) > 10) {
+        return a.x - b.x;
+      }
+      return a.y - b.y;
+    });
+
+    sortedVertices.forEach(v => {
       nodeIdMap[v.id] = counter; 
-      code += `  \\node[draw, circle, fill=white, inner sep=2pt] (v${counter}) at (${v.x}, ${-v.y}) {${counter}};\n`;
+      code += `  \\node[draw, circle, fill=white, inner sep=2pt] (v${counter}) at (${formatCoord(v.x)}, ${formatCoord(-v.y)}) {};\n`;
       counter++;
     });
 
+
     edges.forEach(edge => {
+      const sourceVertex = vertices[edge.sourceId];
+      const targetVertex = vertices[edge.targetId];
       const sourceNum = nodeIdMap[edge.sourceId];
       const targetNum = nodeIdMap[edge.targetId];
-      code += edge.isDirected ? `\\draw[->] (v${sourceNum}) -- (v${targetNum});\n`:`  \\draw (v${sourceNum}) -- (v${targetNum});\n`;
+      
+      const curve = edge.curveStrength ?? 0;
+      
+      const arrowNode = edge.isDirected 
+        ? `node[pos=0.5, sloped, allow upside down, scale=0.7] {$\\blacktriangleright$}` 
+        : "";
+
+      if (Math.abs(curve) > 0.01) {
+        const dx = targetVertex.x - sourceVertex.x;
+        const dy = sourceVertex.y - targetVertex.y; 
+        const baseAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+        
+        const bendAngle = curve * -90;
+        
+        const outAngle = Math.round((baseAngle + bendAngle + 360) % 360);
+        const inAngle = Math.round((baseAngle + 180 - bendAngle + 360) % 360);
+        
+        code += `  \\draw (v${sourceNum}) to[out=${outAngle}, in=${inAngle}] ${arrowNode} (v${targetNum});\n`;
+      } else {
+        code += `  \\draw (v${sourceNum}) -- ${arrowNode} (v${targetNum});\n`;
+      }
     });
 
-    code += "\\end{tikzpicture}";
+    code += "\\end{tikzpicture}\n\\end{figure}";
     return code;
   }
 
   const handleAlign = (type: 'horizontal' | 'vertical' | 'circle') => {
-    // 2つ以上の頂点が選ばれていない場合は何もしない
     if (selectVertexIds.length < 2) return;
 
     setVertices(prev => {
-      // 既存の頂点データをディープコピー（安全に更新するため）
       const newVertices = { ...prev };
       
-      // 選ばれている頂点のデータ（オブジェクト）だけを配列として抽出
       const selectedNodes = selectVertexIds.map(id => newVertices[id]);
       
       if (type === 'horizontal') {
@@ -210,23 +248,55 @@ function App() {
       style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#f3f4f6', display: 'flex', flexDirection: 'column', userSelect: isResizing ? 'none' : 'auto' }}
     >
       
-      {/* ツールバーやヘッダーを置く領域 */}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 20px', backgroundColor: 'white', borderBottom: '1px solid #ccc', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', zIndex: 10 }}>
         <h3 style={{ margin: 0, color: '#333' }}>Graph to TikZ</h3>
         
-        {/* 🌟 追加: 整列ボタン群 */}
+
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button 
-            onClick={() => setIsDirectedMode(!isDirectedMode)}
-            style={{
-              padding: '6px 12px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc',
-              backgroundColor: isDirectedMode ? '#3b82f6' : '#fff',
-              color: isDirectedMode ? '#fff': '#333',
-              marginRight: '15px'
+          {selectedEdgeId && <input 
+            type="range"
+            min="-0.5"
+            max="0.5"
+            step="0.05"
+            value={edges.find(e => e.id === selectedEdgeId)?.curveStrength ?? 0}
+            onChange={(e) => {
+              const newValue = parseFloat(e.target.value);
+              setEdges(prev => prev.map(edge =>
+                edge.id === selectedEdgeId
+                ? {...edge, curveStrength: newValue}
+                :edge
+              ));
             }}
-          >
-            {isDirectedMode? '有向辺' : '無向辺'}
-          </button>
+          />}
+
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginRight: '15px', gap: '8px' }}>
+            <span style={{ fontSize: '14px', color: isDirectedMode ? '#999' : '#333', fontWeight: isDirectedMode ? 'normal' : 'bold' }}>無向</span>
+            
+            <div style={{
+              position: 'relative', width: '44px', height: '24px', 
+              backgroundColor: isDirectedMode ? '#3b82f6' : '#ccc', 
+              borderRadius: '24px', transition: 'background-color 0.2s'
+            }}>
+            
+              <div style={{
+                position: 'absolute', top: '2px', 
+                left: isDirectedMode ? '22px' : '2px', // ON/OFFで位置がスライドする
+                width: '20px', height: '20px', backgroundColor: 'white', 
+                borderRadius: '50%', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+              }} />
+            </div>
+
+            <span style={{ fontSize: '14px', color: isDirectedMode ? '#333' : '#999', fontWeight: isDirectedMode ? 'bold' : 'normal' }}>有向</span>
+            
+            <input 
+              type="checkbox" 
+              checked={isDirectedMode} 
+              onChange={() => setIsDirectedMode(!isDirectedMode)}
+              style={{ display: 'none' }} 
+            />
+          </label>
+
 
           <button 
             onClick={() => handleAlign('horizontal')}
@@ -271,16 +341,42 @@ function App() {
               const sourceVertex = vertices[edge.sourceId];
               const targetVertex = vertices[edge.targetId];
               if (!sourceVertex || !targetVertex) return null;
+
+              const x1 = sourceVertex.x;
+              const y1 = sourceVertex.y;
+              const x2 = targetVertex.x;
+              const y2 = targetVertex.y;
+
+              const curveStrength = edge.curveStrength ?? 0;
+              const cx = (x1 + x2) / 2 - (y2 - y1) * curveStrength;
+              const cy = (y1 + y2) / 2 + (x2 - x1) * curveStrength;
+
               return (
-                <line 
-                  key={edge.id} 
-                  x1={sourceVertex.x} y1={sourceVertex.y} 
-                  x2={targetVertex.x} y2={targetVertex.y} 
-                  stroke="#333" strokeWidth="4" // 少し太くすると押しやすいです
-                  style={{ cursor: 'pointer' }} // カーソルを指マークに
-                  onContextMenu={(e) => handleEdgeContextMenu(e, edge.id)} // 右クリックイベント！
-                  markerEnd={edge.isDirected? "url(#arrow)": undefined}
-                />
+                <g key = {edge.id}>
+                  {selectedEdgeId === edge.id && (
+                    <path
+                      d={`M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`}
+                      fill="none"
+                      stroke="#3b82f6"
+                      strokeWidth="10"
+                      opacity="0.3"
+                      style={{pointerEvents:'none'}}
+                    />
+                  )}
+
+                  <path 
+                    d={`M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`}
+                    fill="none"
+
+                    stroke="#333"
+                    strokeWidth="4"
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => handleEdgeMouseDown(e, edge.id)}
+                    onContextMenu={(e) => handleEdgeContextMenu(e, edge.id)}
+                    markerEnd={edge.isDirected ? "url(#arrow)" : undefined}
+                  />
+                </g>
               );
             })}
             {Object.values(vertices).map((v) => (
