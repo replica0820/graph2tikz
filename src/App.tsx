@@ -10,6 +10,7 @@ function App() {
   const [moveVertex, setMoveVertex] = useState<string|null>(null)
   const [sourceVertexId, setSourceVertexId] = useState<string|null>(null)
   const [selectVertexIds, setSelectVertexIds] = useState<string[]>([])
+  const [isDirectedMode, setIsDirectedMode] = useState(false)
 
   const handleEdgeContextMenu = (e: React.MouseEvent<SVGLineElement>, edgeId: string) => {
     e.preventDefault();
@@ -58,7 +59,7 @@ function App() {
 
     if (sourceVertexId){
       const newEdge: Edge = {
-        id: `e-${Date.now()}`, sourceId: sourceVertexId, targetId: newId, isDirected: false,
+        id: `e-${Date.now()}`, sourceId: sourceVertexId, targetId: newId, isDirected: isDirectedMode,
       }
       setVertices(prev => ({ ...prev, [newId]: newVertex }));
       setEdges(prevEdges => [...prevEdges, newEdge])
@@ -83,7 +84,7 @@ function App() {
 
     if (sourceVertexId){
       const newEdge: Edge = {
-        id: `e-${Date.now()}`, sourceId: sourceVertexId, targetId: id, isDirected: false,
+        id: `e-${Date.now()}`, sourceId: sourceVertexId, targetId: id, isDirected: isDirectedMode,
       }
       setEdges(prevEdges => [...prevEdges, newEdge])
       setSourceVertexId(null)
@@ -121,7 +122,7 @@ function App() {
     edges.forEach(edge => {
       const sourceNum = nodeIdMap[edge.sourceId];
       const targetNum = nodeIdMap[edge.targetId];
-      code += `  \\draw (v${sourceNum}) -- (v${targetNum});\n`;
+      code += edge.isDirected ? `\\draw[->] (v${sourceNum}) -- (v${targetNum});\n`:`  \\draw (v${sourceNum}) -- (v${targetNum});\n`;
     });
 
     code += "\\end{tikzpicture}";
@@ -216,6 +217,18 @@ function App() {
         {/* 🌟 追加: 整列ボタン群 */}
         <div style={{ display: 'flex', gap: '10px' }}>
           <button 
+            onClick={() => setIsDirectedMode(!isDirectedMode)}
+            style={{
+              padding: '6px 12px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc',
+              backgroundColor: isDirectedMode ? '#3b82f6' : '#fff',
+              color: isDirectedMode ? '#fff': '#333',
+              marginRight: '15px'
+            }}
+          >
+            {isDirectedMode? '有向辺' : '無向辺'}
+          </button>
+
+          <button 
             onClick={() => handleAlign('horizontal')}
             disabled={selectVertexIds.length < 2}
             style={{ padding: '6px 12px', cursor: selectVertexIds.length < 2 ? 'not-allowed' : 'pointer', borderRadius: '4px', border: '1px solid #333', backgroundColor: '#fff', color: '#333' }}
@@ -249,6 +262,11 @@ function App() {
             onMouseMove={handleMouseMove}
             style={{ width: '100%', height: '100%', backgroundColor: 'white' }}
           >
+            <defs>
+              <marker id='arrow' viewBox="0 0 10 10" markerWidth="5" markerHeight="5" refX="15" refY="5" orient="auto">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
+              </marker>
+            </defs>
             {edges.map((edge) => {
               const sourceVertex = vertices[edge.sourceId];
               const targetVertex = vertices[edge.targetId];
@@ -261,6 +279,7 @@ function App() {
                   stroke="#333" strokeWidth="4" // 少し太くすると押しやすいです
                   style={{ cursor: 'pointer' }} // カーソルを指マークに
                   onContextMenu={(e) => handleEdgeContextMenu(e, edge.id)} // 右クリックイベント！
+                  markerEnd={edge.isDirected? "url(#arrow)": undefined}
                 />
               );
             })}
