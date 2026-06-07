@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import type { Vertex, Edge } from './types'
 
 function App() {
@@ -12,6 +12,9 @@ function App() {
   const [selectVertexIds, setSelectVertexIds] = useState<string[]>([])
   const [isDirectedMode, setIsDirectedMode] = useState(false)
   const [selectedEdgeId, setSelectEdgeId] = useState<string|null>(null)
+  const [isSnapMode, setIsSnapMode] = useState(false)
+  const Gridsize = 40
+  const hasDragged = useRef(false)
 
   const handleEdgeContextMenu = (e: React.MouseEvent<SVGPathElement>, edgeId: string) => {
     e.preventDefault();
@@ -19,6 +22,10 @@ function App() {
 
     setEdges(prev => prev.filter(edge => edge.id !== edgeId));
   };
+
+  const snapToGrid = (value: number) => {
+    return Math.floor(value / Gridsize) * Gridsize;
+  }
 
   const handleVertexContextMenu = (e: React.MouseEvent<SVGCircleElement>, vertexid: string) => {
     e.preventDefault();
@@ -53,8 +60,14 @@ function App() {
   };
 
   const handleCanvasClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    const x = e.nativeEvent.offsetX;
-    const y = e.nativeEvent.offsetY;
+    if (hasDragged.current){
+      hasDragged.current = false;
+      return;
+    }
+
+
+    const x = isSnapMode? snapToGrid(e.nativeEvent.offsetX) : e.nativeEvent.offsetX;
+    const y = isSnapMode? snapToGrid(e.nativeEvent.offsetY) : e.nativeEvent.offsetY;
     const newId = `v-${Date.now()}`;
     const newVertex: Vertex = { id: newId, x: x, y: y };
     setSelectEdgeId(null);
@@ -105,12 +118,16 @@ function App() {
 
   const handleMouseUp = () => {
     setMoveVertex(null)
+    setTimeout(() => {
+      hasDragged.current = false
+    },50);
   }
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!moveVertex) return;
-    const x = e.nativeEvent.offsetX;
-    const y = e.nativeEvent.offsetY;
+    hasDragged.current = true;
+    const x = isSnapMode? snapToGrid(e.nativeEvent.offsetX) : e.nativeEvent.offsetX;
+    const y = isSnapMode? snapToGrid(e.nativeEvent.offsetY) : e.nativeEvent.offsetY;
     setVertices(state => ({
       ...state, [moveVertex]: { ...state[moveVertex], x: x, y: y }
     }))
@@ -241,6 +258,8 @@ function App() {
     });
   };
 
+
+
   return (
     <div 
       onMouseMove={handleGlobalMouseMove} 
@@ -293,6 +312,33 @@ function App() {
               type="checkbox" 
               checked={isDirectedMode} 
               onChange={() => setIsDirectedMode(!isDirectedMode)}
+              style={{ display: 'none' }} 
+            />
+          </label>
+
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginRight: '15px', gap: '8px' }}>
+            <span style={{ fontSize: '14px', color: isSnapMode ? '#999' : '#333', fontWeight: isSnapMode ? 'normal' : 'bold' }}>グリッドOFF</span>
+            
+            <div style={{
+              position: 'relative', width: '44px', height: '24px', 
+              backgroundColor: isSnapMode ? '#3b82f6' : '#ccc', 
+              borderRadius: '24px', transition: 'background-color 0.2s'
+            }}>
+            
+              <div style={{
+                position: 'absolute', top: '2px', 
+                left: isSnapMode ? '22px' : '2px', // ON/OFFで位置がスライドする
+                width: '20px', height: '20px', backgroundColor: 'white', 
+                borderRadius: '50%', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+              }} />
+            </div>
+
+            <span style={{ fontSize: '14px', color: isSnapMode ? '#333' : '#999', fontWeight: isSnapMode ? 'bold' : 'normal' }}>グリッドON</span>
+            
+            <input 
+              type="checkbox" 
+              checked={isSnapMode} 
+              onChange={() => setIsSnapMode(!isSnapMode)}
               style={{ display: 'none' }} 
             />
           </label>
