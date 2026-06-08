@@ -13,4 +13,5 @@ export interface Edge {
   targetId: string; // 終点
   isDirected: boolean;
   curveStrength? : number;
+  style? : 'solid' | 'dashed' | 'snake';
 }
