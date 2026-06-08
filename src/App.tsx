@@ -317,7 +317,7 @@ function App() {
           </label>
 
           <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginRight: '15px', gap: '8px' }}>
-            <span style={{ fontSize: '14px', color: isSnapMode ? '#999' : '#333', fontWeight: isSnapMode ? 'normal' : 'bold' }}>グリッドOFF</span>
+            <span style={{ fontSize: '14px', color: isSnapMode ? '#999' : '#333', fontWeight: isSnapMode ? 'normal' : 'bold', width: '80px', textAlign: 'right' }}>グリッドOFF</span>
             
             <div style={{
               position: 'relative', width: '44px', height: '24px', 
@@ -333,7 +333,7 @@ function App() {
               }} />
             </div>
 
-            <span style={{ fontSize: '14px', color: isSnapMode ? '#333' : '#999', fontWeight: isSnapMode ? 'bold' : 'normal' }}>グリッドON</span>
+            <span style={{ fontSize: '14px', color: isSnapMode ? '#333' : '#999', fontWeight: isSnapMode ? 'bold' : 'normal', width: '80px', textAlign: 'left' }}>グリッドON</span>
             
             <input 
               type="checkbox" 
@@ -382,7 +382,20 @@ function App() {
               <marker id='arrow' viewBox="0 0 10 10" markerWidth="5" markerHeight="5" refX="15" refY="5" orient="auto">
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
               </marker>
+              <pattern id = "grid-pattern" width={Gridsize} height={Gridsize} patternUnits='userSpaceOnUse'>
+                <path d={`M ${Gridsize} 0 L 0 0 0 ${Gridsize}`} fill = "none" stroke="#e5e7eb" strokeWidth="1"/>
+              </pattern>
             </defs>
+
+            {isSnapMode && (
+              <rect 
+                width="100%" 
+                height="100%" 
+                fill="url(#grid-pattern)" 
+                style={{ pointerEvents: 'none' }}
+              />
+            )}
+
             {edges.map((edge) => {
               const sourceVertex = vertices[edge.sourceId];
               const targetVertex = vertices[edge.targetId];
