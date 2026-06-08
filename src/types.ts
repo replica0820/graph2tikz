@@ -5,6 +5,7 @@ export interface Vertex {
   label?: string;
   color?: string;
   part?: number; // 部集合
+  labelAngle?: number;
 }
 
 export interface Edge {
@@ -14,4 +15,5 @@ export interface Edge {
   isDirected: boolean;
   curveStrength? : number;
   style? : 'solid' | 'dashed' | 'snake';
+  color? : string;
 }
