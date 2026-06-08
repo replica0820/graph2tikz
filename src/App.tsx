@@ -2,6 +2,34 @@ import React, { useState, useRef } from 'react'
 import type { Vertex, Edge } from './types'
 import { AlignHorizontalSpaceAround, AlignVerticalSpaceAround, CircleDashed, LayoutTemplate } from 'lucide-react';
 
+// ベジェ曲線に沿って波線(Snake)のパス文字列を生成する関数
+const generateSnakePath = (x1: number, y1: number, cx: number, cy: number, x2: number, y2: number) => {
+  const segments = 40; // 分割数（滑らかさ）
+  const amplitude = 4; // 波の高さ
+  const waves = 6;     // 波の数（うねうねの回数）
+
+  let path = `M ${x1} ${y1}`;
+  for (let i = 1; i <= segments; i++) {
+    const t = i / segments;
+    
+    // 1. ベジェ曲線上の基本座標
+    const bx = Math.pow(1-t, 2)*x1 + 2*(1-t)*t*cx + Math.pow(t, 2)*x2;
+    const by = Math.pow(1-t, 2)*y1 + 2*(1-t)*t*cy + Math.pow(t, 2)*y2;
+
+    // 2. 接線ベクトル（微分）から法線（垂直な向き）を計算
+    const tx = 2*(1-t)*(cx - x1) + 2*t*(x2 - cx);
+    const ty = 2*(1-t)*(cy - y1) + 2*t*(y2 - cy);
+    const len = Math.sqrt(tx*tx + ty*ty);
+    const nx = -ty / (len || 1);
+    const ny = tx / (len || 1);
+
+    // 3. サイン波で法線方向にずらす
+    const offset = Math.sin(t * Math.PI * 2 * waves) * amplitude;
+    path += ` L ${bx + nx * offset} ${by + ny * offset}`;
+  }
+  return path;
+};
+
 function App() {
   const [isCopied, setIsCopied] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(800);
@@ -29,8 +57,6 @@ function App() {
       type: 'edge',
       id: edgeId
     })
-
-
   };
 
   const snapToGrid = (value: number) => {
@@ -82,7 +108,7 @@ function App() {
 
     if (sourceVertexId){
       const newEdge: Edge = {
-        id: `e-${Date.now()}`, sourceId: sourceVertexId, targetId: newId, isDirected: isDirectedMode,
+        id: `e-${Date.now()}`, sourceId: sourceVertexId, targetId: newId, isDirected: isDirectedMode, style: 'solid'
       }
       setVertices(prev => ({ ...prev, [newId]: newVertex }));
       setEdges(prevEdges => [...prevEdges, newEdge])
@@ -107,7 +133,7 @@ function App() {
 
     if (sourceVertexId){
       const newEdge: Edge = {
-        id: `e-${Date.now()}`, sourceId: sourceVertexId, targetId: id, isDirected: isDirectedMode,
+        id: `e-${Date.now()}`, sourceId: sourceVertexId, targetId: id, isDirected: isDirectedMode, style: 'solid'
       }
       setEdges(prevEdges => [...prevEdges, newEdge])
       setSourceVertexId(null)
@@ -142,7 +168,8 @@ function App() {
   }
 
   const generateTikzCode = () => {
-    let code = "\\begin{figure}[H]\n\\begin{tikzpicture}\n";
+    let code = "% 波線(snake)を使う場合はプリアンブルに \\usetikzlibrary{decorations.pathmorphing} を追加してください\n";
+    code += "\\begin{figure}[H]\n\\begin{tikzpicture}\n";
     const nodeIdMap: Record<string, number> = {};
     let counter = 1;
 
@@ -171,6 +198,10 @@ function App() {
       
       const curve = edge.curveStrength ?? 0;
       
+      let styleOption = "";
+      if (edge.style === 'dashed') styleOption = "[dashed]";
+      if (edge.style === 'snake') styleOption = "[decoration={snake}, decorate]";
+
       const arrowNode = edge.isDirected 
         ? `node[pos=0.5, sloped, allow upside down, scale=0.7] {$\\blacktriangleright$}` 
         : "";
@@ -185,9 +216,9 @@ function App() {
         const outAngle = Math.round((baseAngle + bendAngle + 360) % 360);
         const inAngle = Math.round((baseAngle + 180 - bendAngle + 360) % 360);
         
-        code += `  \\draw (v${sourceNum}) to[out=${outAngle}, in=${inAngle}] ${arrowNode} (v${targetNum});\n`;
+        code += `  \\draw${styleOption} (v${sourceNum}) to[out=${outAngle}, in=${inAngle}] ${arrowNode} (v${targetNum});\n`;
       } else {
-        code += `  \\draw (v${sourceNum}) -- ${arrowNode} (v${targetNum});\n`;
+        code += `  \\draw${styleOption} (v${sourceNum}) -- ${arrowNode} (v${targetNum});\n`;
       }
     });
 
@@ -259,14 +290,11 @@ function App() {
         })
       }
 
-      // 最後に、選択状態を解除しておくと連続操作が暴発せず親切です
       setSelectVertexIds([]);
 
       return newVertices;
     });
   };
-
-
 
   return (
     <div 
@@ -440,11 +468,14 @@ function App() {
                   )}
 
                   <path 
-                    d={`M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`}
+                    d={edge.style === 'snake' 
+                      ? generateSnakePath(x1, y1, cx, cy, x2, y2) 
+                      : `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`
+                    }
                     fill="none"
-
                     stroke="#333"
                     strokeWidth="4"
+                    strokeDasharray={edge.style === 'dashed' ? "8 8" : undefined}
                     style={{ cursor: 'pointer' }}
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => handleEdgeMouseDown(e, edge.id)}
@@ -539,6 +570,37 @@ function App() {
           <div style={{ fontSize: '12px', color: '#666', padding: '4px 8px', borderBottom: '1px solid #eee', marginBottom: '4px' }}>
             {contextMenu.type === 'vertex' ? '頂点' : '辺'}の設定
           </div>
+
+          {contextMenu.type === 'edge' && (
+            <div style={{ display: 'flex', gap: '4px', padding: '4px 8px' }}>
+              <button 
+                onClick={() => {
+                  setEdges(prev => prev.map(edge => 
+                    edge.id === contextMenu.id ? { ...edge, style: 'solid' } : edge
+                  ));
+                }}
+                style={{ flex: 1, padding: '4px', cursor: 'pointer', backgroundColor: '#f3f4f6', border: '1px solid #444', borderRadius: '4px',color: '#333' }}
+              >━</button>
+
+              <button 
+                onClick={() => {
+                  setEdges(prev => prev.map(edge => 
+                    edge.id === contextMenu.id ? { ...edge, style: 'dashed' } : edge
+                  ));
+                }}
+                style={{ flex: 1, padding: '4px', cursor: 'pointer', backgroundColor: '#f3f4f6', border: '1px solid #444', borderRadius: '4px',color: '#333' }}
+              >┉</button>
+
+              <button 
+                onClick={() => {
+                  setEdges(prev => prev.map(edge => 
+                    edge.id === contextMenu.id ? { ...edge, style: 'snake' } : edge
+                  ));
+                }}
+                style={{ flex: 1, padding: '4px', cursor: 'pointer', backgroundColor: '#f3f4f6', border: '1px solid #444', borderRadius: '4px',color: '#333' }}
+              >〰</button>
+            </div>
+          )}
           
           <button style={{ textAlign: 'left', padding: '6px 8px', cursor: 'pointer', border: 'none', backgroundColor: 'transparent' }}>
             🎨 色の変更 (未実装)
@@ -546,7 +608,6 @@ function App() {
           
           <button 
             onClick={() => {
-              // ここに元の削除処理を書く
               if (contextMenu.type === 'vertex') {
                  setVertices(prev => {
                   const newVertices = { ...prev };
@@ -559,7 +620,6 @@ function App() {
               } else {
                  setEdges(prev => prev.filter(edge => edge.id !== contextMenu.id));
               }
-              // 処理が終わったらメニューを閉じる
               setContextMenu(null);
             }}
             style={{ textAlign: 'left', padding: '6px 8px', cursor: 'pointer', border: 'none', backgroundColor: 'transparent', color: '#ef4444' }}
