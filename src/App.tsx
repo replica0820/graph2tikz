@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react'
 import type { Vertex, Edge } from './types'
+import { AlignHorizontalSpaceAround, AlignVerticalSpaceAround, CircleDashed, LayoutTemplate } from 'lucide-react';
 
 function App() {
   const [isCopied, setIsCopied] = useState(false);
@@ -15,12 +16,21 @@ function App() {
   const [isSnapMode, setIsSnapMode] = useState(false)
   const Gridsize = 40
   const hasDragged = useRef(false)
+  const [activeMenu, setActiveMenu] = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<{x: number, y:  number, type: 'vertex'| 'edge', id: string}|null>(null)
 
   const handleEdgeContextMenu = (e: React.MouseEvent<SVGPathElement>, edgeId: string) => {
     e.preventDefault();
     e.stopPropagation();
 
-    setEdges(prev => prev.filter(edge => edge.id !== edgeId));
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      type: 'edge',
+      id: edgeId
+    })
+
+
   };
 
   const snapToGrid = (value: number) => {
@@ -31,16 +41,12 @@ function App() {
     e.preventDefault();
     e.stopPropagation();
 
-    setVertices(prev => {
-      const newVertices = { ...prev };
-      delete newVertices[vertexid];
-      return newVertices;
-    });
-
-    setEdges(prev => prev.filter(edge => edge.sourceId !== vertexid && edge.targetId !== vertexid));
-
-    if (sourceVertexId === vertexid) setSourceVertexId(null);
-    if (moveVertex === vertexid) setMoveVertex(null);
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      type: 'vertex',
+      id: vertexid
+    })
   }
 
   const handleGlobalMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -60,6 +66,8 @@ function App() {
   };
 
   const handleCanvasClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (contextMenu) setContextMenu(null)
+
     if (hasDragged.current){
       hasDragged.current = false;
       return;
@@ -317,7 +325,7 @@ function App() {
           </label>
 
           <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginRight: '15px', gap: '8px' }}>
-            <span style={{ fontSize: '14px', color: isSnapMode ? '#999' : '#333', fontWeight: isSnapMode ? 'normal' : 'bold' }}>グリッドOFF</span>
+            <span style={{ fontSize: '14px', color: isSnapMode ? '#999' : '#333', fontWeight: isSnapMode ? 'normal' : 'bold', width: '80px', textAlign: 'right' }}>グリッドOFF</span>
             
             <div style={{
               position: 'relative', width: '44px', height: '24px', 
@@ -333,7 +341,7 @@ function App() {
               }} />
             </div>
 
-            <span style={{ fontSize: '14px', color: isSnapMode ? '#333' : '#999', fontWeight: isSnapMode ? 'bold' : 'normal' }}>グリッドON</span>
+            <span style={{ fontSize: '14px', color: isSnapMode ? '#333' : '#999', fontWeight: isSnapMode ? 'bold' : 'normal', width: '80px', textAlign: 'left' }}>グリッドON</span>
             
             <input 
               type="checkbox" 
@@ -343,28 +351,36 @@ function App() {
             />
           </label>
 
+          <div style={{ position: 'relative' }}>
+            
+            {/* 親ボタン（常に表示） */}
+            <button 
+              title="整列メニュー"
+              onClick={() => setActiveMenu(activeMenu === 'align' ? null : 'align')}
+              style={{ padding: '6px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc', backgroundColor: '#fff', display: 'flex', alignItems: 'center' }}
+            >
+              <LayoutTemplate size={20} color="#333" />
+            </button>
 
-          <button 
-            onClick={() => handleAlign('horizontal')}
-            disabled={selectVertexIds.length < 2}
-            style={{ padding: '6px 12px', cursor: selectVertexIds.length < 2 ? 'not-allowed' : 'pointer', borderRadius: '4px', border: '1px solid #333', backgroundColor: '#fff', color: '#333' }}
-          >
-            横に揃える
-          </button>
-          <button 
-            onClick={() => handleAlign('vertical')}
-            disabled={selectVertexIds.length < 2}
-            style={{ padding: '6px 12px', cursor: selectVertexIds.length < 2 ? 'not-allowed' : 'pointer', borderRadius: '4px', border: '1px solid #333', backgroundColor: '#fff', color: '#333' }}
-          >
-            縦に揃える
-          </button>
-          <button 
-            onClick={() => handleAlign('circle')}
-            disabled={selectVertexIds.length < 2}
-            style={{ padding: '6px 12px', cursor: selectVertexIds.length < 2 ? 'not-allowed' : 'pointer', borderRadius: '4px', border: '1px solid #333', backgroundColor: '#fff', color: '#333' }}
-          >
-            円状に配置
-          </button>
+            {/* 3. メニューが開いている時だけ中身を表示する条件付きレンダリング */}
+            {activeMenu === 'align' && (
+              <div style={{ 
+                position: 'absolute', top: '100%', left: 0, marginTop: '4px',
+                display: 'flex', flexDirection: 'column', gap: '4px',
+                backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '4px', padding: '4px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
+                <button title="横に揃える" onClick={() => handleAlign('horizontal')} disabled={selectVertexIds.length < 2} style={{ padding: '4px', cursor: 'pointer', backgroundColor: 'transparent', border: 'none' }}>
+                  <AlignHorizontalSpaceAround size={20} color={selectVertexIds.length < 2 ? '#ccc' : '#333'} />
+                </button>
+                <button title="縦に揃える" onClick={() => handleAlign('vertical')} disabled={selectVertexIds.length < 2} style={{ padding: '4px', cursor: 'pointer', backgroundColor: 'transparent', border: 'none' }}>
+                  <AlignVerticalSpaceAround size={20} color={selectVertexIds.length < 2 ? '#ccc' : '#333'} />
+                </button>
+                <button title="円状に配置" onClick={() => handleAlign('circle')} disabled={selectVertexIds.length < 2} style={{ padding: '4px', cursor: 'pointer', backgroundColor: 'transparent', border: 'none' }}>
+                  <CircleDashed size={20} color={selectVertexIds.length < 2 ? '#ccc' : '#333'} />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -382,7 +398,20 @@ function App() {
               <marker id='arrow' viewBox="0 0 10 10" markerWidth="5" markerHeight="5" refX="15" refY="5" orient="auto">
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
               </marker>
+              <pattern id = "grid-pattern" width={Gridsize} height={Gridsize} patternUnits='userSpaceOnUse'>
+                <path d={`M ${Gridsize} 0 L 0 0 0 ${Gridsize}`} fill = "none" stroke="#e5e7eb" strokeWidth="1"/>
+              </pattern>
             </defs>
+
+            {isSnapMode && (
+              <rect 
+                width="100%" 
+                height="100%" 
+                fill="url(#grid-pattern)" 
+                style={{ pointerEvents: 'none' }}
+              />
+            )}
+
             {edges.map((edge) => {
               const sourceVertex = vertices[edge.sourceId];
               const targetVertex = vertices[edge.targetId];
@@ -492,6 +521,53 @@ function App() {
         </div>
 
       </div>
+      {contextMenu && (
+        <div style={{
+          position: 'fixed',
+          top: contextMenu.y,
+          left: contextMenu.x,
+          zIndex: 100, // 他の要素より上に重ねる
+          backgroundColor: 'white',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+          borderRadius: '8px',
+          padding: '8px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+          minWidth: '150px'
+        }}>
+          <div style={{ fontSize: '12px', color: '#666', padding: '4px 8px', borderBottom: '1px solid #eee', marginBottom: '4px' }}>
+            {contextMenu.type === 'vertex' ? '頂点' : '辺'}の設定
+          </div>
+          
+          <button style={{ textAlign: 'left', padding: '6px 8px', cursor: 'pointer', border: 'none', backgroundColor: 'transparent' }}>
+            🎨 色の変更 (未実装)
+          </button>
+          
+          <button 
+            onClick={() => {
+              // ここに元の削除処理を書く
+              if (contextMenu.type === 'vertex') {
+                 setVertices(prev => {
+                  const newVertices = { ...prev };
+                  delete newVertices[contextMenu.id];
+                  return newVertices;
+                });
+                setEdges(prev => prev.filter(edge => edge.sourceId !== contextMenu.id && edge.targetId !== contextMenu.id));
+                if (sourceVertexId === contextMenu.id) setSourceVertexId(null);
+                if (moveVertex === contextMenu.id) setMoveVertex(null);
+              } else {
+                 setEdges(prev => prev.filter(edge => edge.id !== contextMenu.id));
+              }
+              // 処理が終わったらメニューを閉じる
+              setContextMenu(null);
+            }}
+            style={{ textAlign: 'left', padding: '6px 8px', cursor: 'pointer', border: 'none', backgroundColor: 'transparent', color: '#ef4444' }}
+          >
+            🗑️ 削除
+          </button>
+        </div>
+      )}
     </div>
   )
 }
