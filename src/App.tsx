@@ -47,6 +47,14 @@ function App() {
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{x: number, y:  number, type: 'vertex'| 'edge', id: string}|null>(null)
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleEdgeContextMenu = (e: React.MouseEvent<SVGPathElement>, edgeId: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -92,7 +100,10 @@ function App() {
   };
 
   const handleCanvasClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (contextMenu) setContextMenu(null)
+    if (contextMenu) {
+      setContextMenu(null)
+      return;
+    }
 
     if (hasDragged.current){
       hasDragged.current = false;
@@ -185,7 +196,17 @@ function App() {
 
     sortedVertices.forEach(v => {
       nodeIdMap[v.id] = counter; 
-      code += `  \\node[draw, circle, fill=white, inner sep=2pt] (v${counter}) at (${formatCoord(v.x)}, ${formatCoord(-v.y)}) {};\n`;
+      
+      // TikZ用の塗りつぶし色と枠線色を計算
+      const fillC = v.color === '#333333' ? 'black' : (v.color || 'white');
+      let drawC = 'black';
+      if (v.color === 'red') drawC = 'red!75!black'; // 赤を75%、黒を25%混ぜた暗めの赤
+      if (v.color === 'blue') drawC = 'blue!75!black';
+      if (v.color === 'green') drawC = 'green!75!black';
+
+      const labelOpt = v.label ? `,label={${v.labelAngle || 0}:${v.label}}` : "";
+
+      code += `  \\node[draw=${drawC}, circle, fill=${fillC}, inner sep=2pt ${labelOpt}] (v${counter}) at (${formatCoord(v.x)}, ${formatCoord(-v.y)}) {};\n`;
       counter++;
     });
 
@@ -198,9 +219,20 @@ function App() {
       
       const curve = edge.curveStrength ?? 0;
       
+      // オプションを配列に全て詰めてから結合することで、スタイルと色を共存させる
+      const options: string[] = [];
+      if (edge.style === 'dashed') options.push("dashed");
+      if (edge.style === 'snake') options.push("decoration={snake}, decorate");
+      
+      // 黒(#333333)はデフォルトなので出力不要。それ以外の色があれば追加する
+      if (edge.color && edge.color !== '#333333') {
+        options.push(edge.color);
+      }
+
       let styleOption = "";
-      if (edge.style === 'dashed') styleOption = "[dashed]";
-      if (edge.style === 'snake') styleOption = "[decoration={snake}, decorate]";
+      if (options.length > 0) {
+        styleOption = `[${options.join(", ")}]`;
+      }
 
       const arrowNode = edge.isDirected 
         ? `node[pos=0.5, sloped, allow upside down, scale=0.7] {$\\blacktriangleright$}` 
@@ -473,7 +505,7 @@ function App() {
                       : `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`
                     }
                     fill="none"
-                    stroke="#333"
+                    stroke={edge.color || "#333"}
                     strokeWidth="4"
                     strokeDasharray={edge.style === 'dashed' ? "8 8" : undefined}
                     style={{ cursor: 'pointer' }}
@@ -485,26 +517,54 @@ function App() {
                 </g>
               );
             })}
-            {Object.values(vertices).map((v) => (
-              <g key={v.id}>
-                {(sourceVertexId === v.id || selectVertexIds.includes(v.id)) &&(
-                  <circle
-                  cx={v.x} cy={v.y} r = "18"
-                  fill='#3b82f6' opacity="0.3"
-                  style={{pointerEvents: 'none'}}
-                  />
-                )}
+            {Object.values(vertices).map((v) => {
+              const vBorderColor = 
+                v.color === 'red' ? 'darkred' :
+                v.color === 'blue' ? 'darkblue' :
+                v.color === 'green' ? 'darkgreen' : '#333';
 
-                <circle
-                  onClick={(e) => e.stopPropagation()} 
-                  onMouseDown={(e) => handleVertexMouseDown(e, v.id)} 
-                  onContextMenu={(e) => handleVertexContextMenu(e, v.id)} 
-                  cx={v.x} cy={v.y} r="12" 
-                  fill="white" stroke="#333" strokeWidth="3"
-                  style={{ cursor: 'pointer' }}
-                />
-              </g>
-            ))}
+              const labelDist = 20;
+              const labelRad = -(v.labelAngle || 0) * Math.PI / 180;
+              const lx = v.x + labelDist * Math.cos(labelRad);
+              const ly = v.y + labelDist * Math.sin(labelRad);
+
+              return (
+                <g key={v.id}>
+                  {(sourceVertexId === v.id || selectVertexIds.includes(v.id)) && (
+                    <circle
+                      cx={v.x} cy={v.y} r="18"
+                      fill='#3b82f6' opacity="0.3"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  )}
+
+                  <circle
+                    onClick={(e) => e.stopPropagation()} 
+                    onMouseDown={(e) => handleVertexMouseDown(e, v.id)} 
+                    onContextMenu={(e) => handleVertexContextMenu(e, v.id)} 
+                    cx={v.x} cy={v.y} r="12" 
+                    fill={v.color || "white"} stroke={vBorderColor} strokeWidth="3"
+                    style={{ cursor: 'pointer' }}
+                  />
+
+                  {v.label && (
+                    <text 
+                      x={lx} y={ly} 
+                      style={{ 
+                        fontSize: '14px', 
+                        fontWeight: 'bold', 
+                        pointerEvents: 'none',
+                        userSelect: 'none' 
+                      }}
+                      textAnchor="middle" 
+                      dominantBaseline="middle"
+                    >
+                      {v.label}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
           </svg>
         </div>
 
@@ -601,10 +661,65 @@ function App() {
               >〰</button>
             </div>
           )}
+
+          {contextMenu.type === 'vertex' && (
+            <div style={{ padding: '8px' }}>
+              <input 
+                placeholder="ラベル名 (例: v1)" 
+                value={vertices[contextMenu.id].label || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setVertices(prev => ({
+                    ...prev,
+                    [contextMenu.id]: { ...prev[contextMenu.id], label: val }
+                  }));
+                }}
+              />
+              <input 
+                type="range" min="0" max="360"
+                value={vertices[contextMenu.id].labelAngle || 0}
+                onChange={(e) => {
+                  const angle = parseInt(e.target.value);
+                  setVertices(prev => ({
+                    ...prev,
+                    [contextMenu.id]: { ...prev[contextMenu.id], labelAngle: angle }
+                  }));
+                }}
+              />
+            </div>
+          )}
           
-          <button style={{ textAlign: 'left', padding: '6px 8px', cursor: 'pointer', border: 'none', backgroundColor: 'transparent' }}>
-            🎨 色の変更 (未実装)
-          </button>
+          <div style={{ display: 'flex', gap: '8px', padding: '4px 8px', justifyContent: 'center' }}>
+            {['#333333', 'red', 'blue', 'green', 'white'].map(c => {
+              // ボタンUI用の枠線色
+              let btnBorder = '#333';
+              if (c === 'red') btnBorder = 'darkred';
+              if (c === 'blue') btnBorder = 'darkblue';
+              if (c === 'green') btnBorder = 'darkgreen';
+
+              return (
+                <button 
+                  key={c}
+                  onClick={() => {
+                    if (contextMenu.type === 'vertex') {
+                      setVertices(prev => ({
+                        ...prev,
+                        [contextMenu.id]: { ...prev[contextMenu.id], color: c }
+                      }));
+                    } else {
+                      setEdges(prev => prev.map(edge => 
+                        edge.id === contextMenu.id ? { ...edge, color: c } : edge
+                      ));
+                    }
+                  }}
+                  style={{ 
+                    width: '24px', height: '24px', borderRadius: '50%', cursor: 'pointer',
+                    backgroundColor: c, border: `2px solid ${btnBorder}` 
+                  }} 
+                />
+              )
+            })}
+          </div>
           
           <button 
             onClick={() => {
